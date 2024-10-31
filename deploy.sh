@@ -6,20 +6,6 @@
 # it does not exit with 0, as we are interested in the final exit.
 set -eo
 
-# Ensure SVN username and password are set
-# IMPORTANT: while secrets are encrypted and not viewable in the GitHub UI,
-# they are by necessity provided as plaintext in the context of the Action,
-# so do not echo or use debug mode unless you want your secrets exposed!
-if [[ -z "$SVN_USERNAME" ]]; then
-	echo "Set the SVN_USERNAME secret"
-	exit 1
-fi
-
-if [[ -z "$SVN_PASSWORD" ]]; then
-	echo "Set the SVN_PASSWORD secret"
-	exit 1
-fi
-
 if $INPUT_DRY_RUN; then
 	echo "ℹ︎ Dry run: No files will be committed to Subversion."
 fi
@@ -55,16 +41,19 @@ if [[ "$BUILD_DIR" != false ]]; then
 	echo "ℹ︎ BUILD_DIR is $BUILD_DIR"
 fi
 
-SVN_URL="https://plugins.svn.wordpress.org/${SLUG}/"
 SVN_DIR="${HOME}/svn-${SLUG}"
 
 # Checkout SVN repository.
-echo "➤ Checking out .org repository..."
-svn checkout --depth immediates "$SVN_URL" "$SVN_DIR"
+echo "➤ Checking out directory exists..."
+
+if [ ! -d "$SVN_DIR" ]; then
+  mkdir "$SVN_DIR"
+  echo "Directory '$SVN_DIR' created successfully"
+else
+  echo "Directory '$SVN_DIR' exists already"
+fi
+
 cd "$SVN_DIR"
-svn update --set-depth infinity assets
-svn update --set-depth infinity trunk
-svn update --set-depth immediates tags
 
 generate_zip() {
   if $INPUT_GENERATE_ZIP; then
@@ -154,47 +143,6 @@ if [[ -d "$GITHUB_WORKSPACE/$ASSETS_DIR/" ]]; then
 	rsync -rc "$GITHUB_WORKSPACE/$ASSETS_DIR/" assets/ --delete
 else
 	echo "ℹ︎ No assets directory found; skipping asset copy"
-fi
-
-# Add everything and commit to SVN
-# The force flag ensures we recurse into subdirectories even if they are already added
-# Suppress stdout in favor of svn status later for readability
-echo "➤ Preparing files..."
-svn add . --force > /dev/null
-
-# SVN delete all deleted files
-# Also suppress stdout here
-svn status | grep '^\!' | sed 's/! *//' | xargs -I% svn rm %@ > /dev/null
-
-# Copy tag locally to make this a single commit
-echo "➤ Copying tag..."
-svn cp "trunk" "tags/$VERSION"
-
-# Fix screenshots getting force downloaded when clicking them
-# https://developer.wordpress.org/plugins/wordpress-org/plugin-assets/
-if test -d "$SVN_DIR/assets" && test -n "$(find "$SVN_DIR/assets" -maxdepth 1 -name "*.png" -print -quit)"; then
-    svn propset svn:mime-type "image/png" "$SVN_DIR/assets/"*.png || true
-fi
-if test -d "$SVN_DIR/assets" && test -n "$(find "$SVN_DIR/assets" -maxdepth 1 -name "*.jpg" -print -quit)"; then
-    svn propset svn:mime-type "image/jpeg" "$SVN_DIR/assets/"*.jpg || true
-fi
-if test -d "$SVN_DIR/assets" && test -n "$(find "$SVN_DIR/assets" -maxdepth 1 -name "*.gif" -print -quit)"; then
-    svn propset svn:mime-type "image/gif" "$SVN_DIR/assets/"*.gif || true
-fi
-if test -d "$SVN_DIR/assets" && test -n "$(find "$SVN_DIR/assets" -maxdepth 1 -name "*.svg" -print -quit)"; then
-    svn propset svn:mime-type "image/svg+xml" "$SVN_DIR/assets/"*.svg || true
-fi
-
-#Resolves => SVN commit failed: Directory out of date
-svn update
-
-svn status
-
-if $INPUT_DRY_RUN; then
-  echo "➤ Dry run: Files not committed."
-else
-  echo "➤ Committing files..."
-  svn commit -m "Update to version $VERSION from GitHub" --no-auth-cache --non-interactive  --username "$SVN_USERNAME" --password "$SVN_PASSWORD"
 fi
 
 generate_zip
