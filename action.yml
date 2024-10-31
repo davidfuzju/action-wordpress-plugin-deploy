@@ -1,22 +1,19 @@
-name: 'WordPress Plugin Deploy'
-description: 'Deploy to the WordPress Plugin Repository'
-author: '10up'
+name: "NuVous WordPress Plugin Deploy"
+description: "Deploy to the WordPress Plugin Repository"
+author: "davidfuzju"
 branding:
-  icon: 'upload-cloud'
-  color: 'blue'
+  icon: "upload-cloud"
+  color: "blue"
 inputs:
   generate-zip:
-    description: 'Generate package zip file?'
-    default: false
-  dry-run:
-    description: 'Run the deployment process without committing.'
+    description: "Generate package zip file?"
     default: false
 outputs:
   zip-path:
-    description: 'Path to zip file'
+    description: "Path to zip file"
     value: ${{ steps.deploy.outputs.zip-path }}
 runs:
-  using: 'composite'
+  using: "composite"
   steps:
     - id: deploy
       env:
